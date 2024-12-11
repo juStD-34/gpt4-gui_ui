@@ -1,0 +1,118 @@
+{
+  "hash": "67364994",
+  "configHash": "d7f709c4",
+  "lockfileHash": "2687bf1f",
+  "browserHash": "68ceabcc",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "d54d7ddd",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "4da2f637",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "f40a0a66",
+      "needsInterop": true
+    },
+    "react-router-dom": {
+      "src": "../../node_modules/react-router-dom/dist/index.js",
+      "file": "react-router-dom.js",
+      "fileHash": "ad4bdedf",
+      "needsInterop": false
+    },
+    "antd": {
+      "src": "../../node_modules/antd/es/index.js",
+      "file": "antd.js",
+      "fileHash": "327b28a0",
+      "needsInterop": false
+    },
+    "@uiw/react-codemirror": {
+      "src": "../../node_modules/@uiw/react-codemirror/esm/index.js",
+      "file": "@uiw_react-codemirror.js",
+      "fileHash": "676ec2d6",
+      "needsInterop": false
+    },
+    "@codemirror/lang-java": {
+      "src": "../../node_modules/@codemirror/lang-java/dist/index.js",
+      "file": "@codemirror_lang-java.js",
+      "fileHash": "af389077",
+      "needsInterop": false
+    },
+    "antd/es/layout/layout": {
+      "src": "../../node_modules/antd/es/layout/layout.js",
+      "file": "antd_es_layout_layout.js",
+      "fileHash": "a112cfd1",
+      "needsInterop": false
+    },
+    "antd/es/layout/Sider": {
+      "src": "../../node_modules/antd/es/layout/Sider.js",
+      "file": "antd_es_layout_Sider.js",
+      "fileHash": "362f645c",
+      "needsInterop": false
+    },
+    "antd/es/tabs/TabPane": {
+      "src": "../../node_modules/antd/es/tabs/TabPane.js",
+      "file": "antd_es_tabs_TabPane.js",
+      "fileHash": "f89cb481",
+      "needsInterop": false
+    },
+    "@ant-design/icons": {
+      "src": "../../node_modules/@ant-design/icons/es/index.js",
+      "file": "@ant-design_icons.js",
+      "fileHash": "e4065370",
+      "needsInterop": false
+    },
+    "@fortawesome/react-fontawesome": {
+      "src": "../../node_modules/@fortawesome/react-fontawesome/index.es.js",
+      "file": "@fortawesome_react-fontawesome.js",
+      "fileHash": "6d8927bf",
+      "needsInterop": false
+    },
+    "@fortawesome/free-solid-svg-icons": {
+      "src": "../../node_modules/@fortawesome/free-solid-svg-icons/index.mjs",
+      "file": "@fortawesome_free-solid-svg-icons.js",
+      "fileHash": "2ddc860a",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-VGDAICZQ": {
+      "file": "chunk-VGDAICZQ.js"
+    },
+    "chunk-VCR25HNS": {
+      "file": "chunk-VCR25HNS.js"
+    },
+    "chunk-W5NIQ2K2": {
+      "file": "chunk-W5NIQ2K2.js"
+    },
+    "chunk-3ZTSC5QJ": {
+      "file": "chunk-3ZTSC5QJ.js"
+    },
+    "chunk-FOAB224S": {
+      "file": "chunk-FOAB224S.js"
+    },
+    "chunk-3WSECTTP": {
+      "file": "chunk-3WSECTTP.js"
+    },
+    "chunk-HCGKX5ED": {
+      "file": "chunk-HCGKX5ED.js"
+    },
+    "chunk-64OUME57": {
+      "file": "chunk-64OUME57.js"
+    },
+    "chunk-WNPTCGAH": {
+      "file": "chunk-WNPTCGAH.js"
+    },
+    "chunk-5WRI5ZAA": {
+      "file": "chunk-5WRI5ZAA.js"
+    }
+  }
+}
