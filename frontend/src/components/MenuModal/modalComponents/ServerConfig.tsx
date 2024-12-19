@@ -62,7 +62,7 @@ const ServerConfig = (props: Props) => {
         >
           Save
         </Button>
-        <Button onClick={onCancel}>Cancel</Button>
+        <Button onClick={() =>onCancel}>Cancel</Button>
       </div>
     </div>
   );

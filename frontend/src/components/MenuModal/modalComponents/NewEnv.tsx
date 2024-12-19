@@ -1,6 +1,7 @@
 import { Button, Input, message, Space } from "antd";
 import { useContext, useState } from "react";
 import { ModalContext } from "..";
+import { API_ENDPOINTS } from "../../../const";
 
 type Props = {};
 
@@ -34,7 +35,7 @@ const NewEnv = ({}: Props) => {
   
     try {
       setLoading(true);
-      const res = await fetch("/api/create-environment", {
+      const res = await fetch(API_ENDPOINTS.CREATE_ENV, {
         method: "POST",
         body: formData,
       });
@@ -45,12 +46,13 @@ const NewEnv = ({}: Props) => {
           message.error(result.message);
         } else {
           message.success(result.message);
-          onCancel(); // Close modal or reset form
+          onCancel(true); // Close modal or reset form
         }
       } else {
         message.error("Failed to create environment.");
       }
     } catch (error) {
+      console.log(error)
       message.error("An error occurred. Please try again.");
     } finally {
       setLoading(false);
@@ -96,7 +98,7 @@ const NewEnv = ({}: Props) => {
         <Button type="primary" onClick={onCreateEnv} loading={loading}>
           Create
         </Button>
-        <Button style={{ marginLeft: 20 }} onClick={onCancel}>
+        <Button style={{ marginLeft: 20 }} onClick={() => onCancel}>
           Cancel
         </Button>
       </div>

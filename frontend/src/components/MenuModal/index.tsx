@@ -10,7 +10,12 @@ type MenuModalProps = {
 
 export const ModalContext = React.createContext({
   isShowModal: false,
-  onCancel: () => {},
+  onCancel: (shouldReload = false) => {
+    console.log("Modal closed");
+    if (shouldReload) {
+      window.location.reload(); // Chỉ reload khi cần thiết
+    }
+  },
   selectedMenuItem: null,
 });
 

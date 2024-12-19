@@ -77,7 +77,7 @@ const OpenEnv = ({}: Props) => {
         <Button type="primary" onClick={onOpenEnv}>
           Open
         </Button>
-        <Button style={{ marginLeft: 20 }} onClick={onCancel}>
+        <Button style={{ marginLeft: 20 }} onClick={() => onCancel}>
           Cancel
         </Button>
       </div>
