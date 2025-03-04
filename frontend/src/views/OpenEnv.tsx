@@ -1,191 +1,304 @@
-import { Button, Descriptions, Layout, Tabs } from "antd";
+import { Button, Descriptions, Layout, Tabs, Modal, message } from "antd";
 import { Content } from "antd/es/layout/layout";
 import Sider from "antd/es/layout/Sider";
 import TabPane from "antd/es/tabs/TabPane";
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { API_ENDPOINTS, API_HOST } from "../const";
+import { API_ENDPOINTS } from "../const";
 import SeleniumCodeEditor from "./JavaEditor";
+import FolderTree from "../components/Sidebar/FolderTree";
+import { TestCase, TestImage, TestScenario } from "../types";
+import { TestCaseApi, ImageApi, PredictionApi } from "../utils/api";
+import AddTestForm from "../components/TestCase/AddTestForm";
+import ImageViewer from "../components/ImageViewer/ImageViewer";
 
 type Props = {};
 
 const OpenEnv = (props: Props) => {
   const location = useLocation();
-  const [testList, setTestList] = useState<any | null>("abc");
-
+  const [testList, setTestList] = useState<Record<string, TestCase>>({});
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
+  const [imageList, setImageList] = useState<TestImage[]>([]); 
+  const [scenarioData, setScenarioData] = useState<TestScenario | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("1");
+  const [selectedImage, setSelectedImage] = useState<TestImage | null>(null);
+  const [isAddTestModalVisible, setIsAddTestModalVisible] = useState(false);
 
   const { env } = (location.state as any) || {};
 
-  const testData = testList[selectedTest] || {};
+  const firstTestCase = scenarioData?.testData?.[0] || null;
+
+  // Đảm bảo testData luôn có kiểu TestCase để tránh lỗi property không tồn tại
+  const testData: TestCase = selectedTest && testList[selectedTest] 
+    ? testList[selectedTest] 
+    : {
+        id: 0,
+        testId: '',
+        testItem: '',
+        testProcedure: '',
+        websiteUrl: '',
+        testClassification: '',
+        expectedOutput: '',
+        environmentCondition: ''
+      };
 
   const [modelPrediction, setModelPrediction] = useState<string>("");
-  const [traditionalPrediction, setTraditionalPrediction] =
-    useState<string>("");
+  const [traditionalPrediction, setTraditionalPrediction] = useState<string>("");
 
-  const callPredictionAPI = async (setResult) => {
+  // Gọi API dự đoán 
+  const callPredictionAPI = async () => {
+    if (!selectedTest) {
+      message.warning("Vui lòng chọn một test case để dự đoán");
+      return;
+    }
+
+    setLoading(true);
     try {
-      const payload = createPayloadFromTestList();
-      const response = await fetch(API_ENDPOINTS.PREDICTION, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload), // Gửi payload lên server
-      });
+      const response = await PredictionApi.callPrediction(testData);
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.message || "Không thể lấy kết quả dự đoán");
+      }
+      
+      // Extract response content
+      const responseData = response.data.data?.[0]?.response;
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+      if (!responseData) {
+        setModelPrediction("Không có dữ liệu phản hồi.");
+        return;
       }
 
-      const data = await response.json();
-      if (data.error) {
-        console.error("Prediction API error:", data.message);
-        setResult(`Error: ${data.message}`);
-      } else {
-        console.log("Prediction API response:", data);
+      try {
+        // Parse the response data
+        const parsedResponse = JSON.parse(responseData);
 
-        // Extract response content
-        const responseData = data.data?.[0]?.response;
+        // Extract predictions and split by commas
+        const predictions = parsedResponse.predictions?.join(",") || "";
+        const splitPredictions = predictions.split(",");
 
-        if (!responseData) {
-          setResult("No response data available.");
-          return;
-        }
+        // Add numbering and line breaks
+        const formattedPredictions = splitPredictions
+          .map((step: string, index: number) => `${index + 1}. ${step.trim()}`)
+          .join("\n");
 
-        try {
-          // Parse the response data
-          const parsedResponse = JSON.parse(responseData);
-
-          // Extract predictions and split by commas
-          const predictions = parsedResponse.predictions?.join(",") || "";
-          const splitPredictions = predictions.split(",");
-
-          // Add numbering and line breaks
-          const formattedPredictions = splitPredictions
-            .map((step, index) => `${index + 1}. ${step.trim()}`)
-            .join("\n");
-
-          // Update state with formatted predictions
-          setResult(formattedPredictions);
-        } catch (parseError) {
-          console.error("Failed to parse response data:", parseError);
-          setResult("Error parsing response data.");
-        }
+        // Update state with formatted predictions
+        setModelPrediction(formattedPredictions);
+      } catch (parseError) {
+        console.error("Lỗi khi phân tích dữ liệu phản hồi:", parseError);
+        setModelPrediction("Lỗi khi phân tích dữ liệu phản hồi.");
       }
     } catch (error) {
-      console.error("Failed to call Prediction API:", error.message);
-      setResult(`Error: ${error.message}`);
+      console.error("Lỗi khi gọi API dự đoán:", error);
+      setModelPrediction(`Lỗi: ${error instanceof Error ? error.message : "Không xác định"}`);
+    } finally {
+      setLoading(false);
     }
   };
-  const createPayloadFromTestList = () => {
-    if (!selectedTest || !testList[selectedTest]) {
-      console.error("No selected test or data found in testList");
-      return null;
-    }
 
-    const testData = testList[selectedTest];
+  // Handlers cho FolderTree
+  const handleTestSelect = (testKey: string) => {
+    setSelectedTest(testKey);
+    // Reset các kết quả dự đoán khi chọn test case mới
+    setModelPrediction("");
+    setTraditionalPrediction("");
 
-    const payload = {
-      config_id: 1, //TODO: set local config_id
-      pred_list: [
-        {
-          testItem: testData.testItem,
-          testProcedure: testData.testProcedure,
-          expectedOutput: testData.expectedOutput,
-          environmentCondition: testData.environmentCondition,
-        },
-      ],
-    };
-    console.log("TEST")
-    return payload;
+    setActiveTab("1");
   };
 
+  const handleImageSelect = (image: TestImage) => {
+    // Lưu ảnh được chọn vào state
+    setSelectedImage(image);
+    // Chuyển sang TabPane hình ảnh
+    setActiveTab("3");
+  };
 
+  const handleAddTest = () => {
+    console.log("handleAddTest called in OpenEnv");
+    setIsAddTestModalVisible(true);
+  };
+
+  const handleAddTestSuccess = (newTest: TestCase) => {
+    // Update the test list with the new test
+    setTestList(prev => ({
+      ...prev,
+      [newTest.testItem]: newTest
+    }));
+    
+    // Select the newly added test
+    setSelectedTest(newTest.testItem);
+    
+    // Switch to the test details tab
+    setActiveTab("1");
+  };
+
+  const handleAddImage = () => {
+    // TODO: Implement giao diện upload hình ảnh
+    message.info("Tính năng thêm hình ảnh đang được phát triển");
+  };
+
+  const handleEditTest = (testKey: string) => {
+    // TODO: Implement giao diện chỉnh sửa test case
+    message.info(`Tính năng chỉnh sửa test case ${testKey} đang được phát triển`);
+  };
+
+  const handleDeleteTest = (testKey: string) => {
+    Modal.confirm({
+      title: 'Xác nhận xóa',
+      content: `Bạn có chắc muốn xóa test case "${testKey}" không?`,
+      onOk: async () => {
+        try {
+          setLoading(true);
+          const response = await TestCaseApi.deleteTestCase(testKey);
+          
+          if (response.success) {
+            // Cập nhật danh sách test sau khi xóa
+            const updatedTestList = { ...testList };
+            delete updatedTestList[testKey];
+            setTestList(updatedTestList);
+            
+            if (selectedTest === testKey) {
+              setSelectedTest(null);
+            }
+            
+            message.success('Xóa test case thành công');
+          } else {
+            throw new Error(response.message);
+          }
+        } catch (error) {
+          console.error("Lỗi khi xóa test case:", error);
+          message.error(`Xóa test case thất bại: ${error instanceof Error ? error.message : "Lỗi không xác định"}`);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleDeleteImage = (imageId: number) => {
+    Modal.confirm({
+      title: 'Xác nhận xóa',
+      content: 'Bạn có chắc muốn xóa hình ảnh này không?',
+      onOk: async () => {
+        try {
+          setLoading(true);
+          const response = await ImageApi.deleteImage(imageId);
+          
+          if (response.success) {
+            // Cập nhật danh sách hình ảnh sau khi xóa
+            const updatedImageList = imageList.filter(img => img.id !== imageId);
+            setImageList(updatedImageList);
+            
+            // Nếu đang xem ảnh bị xóa, reset selectedImage và chuyển về tab 1
+            if (selectedImage && selectedImage.id === imageId) {
+              setSelectedImage(null);
+              setActiveTab("1");
+            }
+            
+            message.success('Xóa hình ảnh thành công');
+          } else {
+            throw new Error(response.message);
+          }
+        } catch (error) {
+          console.error("Lỗi khi xóa hình ảnh:", error);
+          message.error(`Xóa hình ảnh thất bại: ${error instanceof Error ? error.message : "Lỗi không xác định"}`);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleRenameImage = async (imageId: number, newName: string) => {
+    try {
+      setLoading(true);
+      const response = await ImageApi.renameImage(imageId, newName);
+      
+      if (response.success && response.data) {
+        // Cập nhật danh sách hình ảnh sau khi đổi tên
+        const updatedImageList = imageList.map(img => 
+          img.id === imageId ? { ...img, name: newName } : img
+        );
+        setImageList(updatedImageList);
+        
+        // Cập nhật selectedImage nếu đang xem ảnh đó
+        if (selectedImage && selectedImage.id === imageId) {
+          setSelectedImage({...selectedImage, name: newName});
+        }
+        
+        message.success('Đổi tên hình ảnh thành công');
+      } else {
+        throw new Error(response.message);
+      }
+    } catch (error) {
+      console.error("Lỗi khi đổi tên hình ảnh:", error);
+      message.error(`Đổi tên hình ảnh thất bại: ${error instanceof Error ? error.message : "Lỗi không xác định"}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch dữ liệu ban đầu
   useEffect(() => {
-    const fetchEnvironments = async () => {
+    const fetchData = async () => {
       try {
+        setLoading(true);
         const response = await fetch(API_ENDPOINTS.ENV_DETAILS + env);
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
-        const resData = await response.json();
-        const data = resData.testData || [];
-        // const data = [
-        //   {
-        //     testProcedure:
-        //       '1. Open http://webtest.ranorex.org/wp-login.php\n2. Fill "abc" into "Username" \n3. Fill "123" into "Password" field \n4. Click "Login" button',
-        //     testItem: "Login_001",
-        //     websiteUrl: "http://webtest.ranorex.org",
-        //     testId: "1.0",
-        //     testClassification: "Check login fail",
-        //     expectedOutput:
-        //       '1. Login page is opened\n2. Validate "abc" is filled into "Username" field\n3. Validate "123" is filled into "Password" field\n4. Could not log in with error message: "Username is invalid"',
-        //     environmentCondition: "Abnormal",
-        //   },
-        //   {
-        //     testProcedure:
-        //       '1. Open http://webtest.ranorex.org/wp-login.php\n2. Fill "ranorex webtest" into "Username" \n3. Fill "ranorex" into "Password" field \n4. Click "Login" button',
-        //     testItem: "Login_002",
-        //     websiteUrl: "http://webtest.ranorex.org",
-        //     testId: "2.0",
-        //     testClassification: "Check login successfully ",
-        //     expectedOutput:
-        //       '4.1. Log in successfully. New page is opened with title is "Dashboard"\n4.2. Exist "Dashboard" , "Posts", "Media", "Comments", "Tools", "Collapse menu"',
-        //     environmentCondition: "Normal",
-        //   },
-        //   {
-        //     testProcedure:
-        //       '1. Click "Posts" item in left menu \n2. Click "Add New" item \n3. Fill "TitleTestRanorex" into "Enter title here" placeholder\n4. Fill "Test creating new post" into text-area \n5. Click "Publish" button\n6. Click "View post" hyper link',
-        //     testItem: "AddPost_001",
-        //     websiteUrl: "http://webtest.ranorex.org",
-        //     testId: "3.0",
-        //     testClassification: "Add new post ",
-        //     expectedOutput:
-        //       '1. "Posts" page is opened\n5. New post is created successfully: \n- Page change to "Edit Post"\n- Display "Post published. View post" \n6. Navigate to new post',
-        //     environmentCondition: "Normal",
-        //   },
-        // ];
+        const resData: TestScenario = await response.json();
+        setScenarioData(resData);
+        
+        const testData = resData.testData || [];
+        const images = resData.images || [];
 
-        const mappedData = data.reduce((acc, item) => {
-          acc[item.testItem] = {
-            testProcedure: item.testProcedure,
-            testItem: item.testItem,
-            websiteUrl: item.websiteUrl,
-            testId: item.testId,
-            testClassification: item.testClassification,
-            expectedOutput: item.expectedOutput,
-            environmentCondition: item.environmentCondition,
-          };
+        // Map các test case theo testItem để dễ tìm kiếm
+        const mappedData = testData.reduce((acc, item) => {
+          acc[item.id.toString()] = item;
           return acc;
-        }, {});
+        }, {} as Record<string, TestCase>);
 
         setTestList(mappedData);
+        setImageList(images);
       } catch (error) {
-        console.error("Failed to load environments:", error);
+        console.error("Lỗi khi tải môi trường:", error);
+        message.error(`Lỗi khi tải dữ liệu: ${error instanceof Error ? error.message : "Lỗi không xác định"}`);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchEnvironments();
+    if (env) {
+      fetchData();
+    }
   }, [env]);
 
   return (
     <Layout className="h-full">
-      <Sider theme={"light"} className="flex items-center pt-12">
-        {Object.keys(testList).map((key) => (
-          <Button
-            className={`w-full text-center ${selectedTest === key ? "bg-blue-500" : "bg-white"
-              }`}
-            key={key}
-            onClick={() => setSelectedTest(key)}
-          >
-            {key}
-          </Button>
-        ))}
+      <Sider theme={"light"} width={280} className="overflow-hidden border-r">
+        <div className="p-3 border-b bg-gray-50 flex justify-between items-center">
+          <h3 className="text-base font-medium m-0">
+            {scenarioData?.name || "Test Scenario"}
+          </h3>
+        </div>
+        <FolderTree
+          testList={testList}
+          imageList={imageList}
+          onTestSelect={handleTestSelect}
+          onImageSelect={handleImageSelect}
+          onAddTest={handleAddTest}
+          onAddImage={handleAddImage}
+          onEditTest={handleEditTest}
+          onDeleteTest={handleDeleteTest}
+          onDeleteImage={handleDeleteImage}
+          onRenameImage={handleRenameImage}
+        />
       </Sider>
       <Content>
         <Tabs
-          defaultActiveKey="1"
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key)}
           style={{ minHeight: "400px", paddingLeft: "12px" }}
         >
           <TabPane tab="Test Case Details" key="1">
@@ -197,38 +310,37 @@ const OpenEnv = (props: Props) => {
                   size="small"
                   labelStyle={{ fontWeight: "bold", width: "200px" }}
                   contentStyle={{ whiteSpace: "pre-wrap" }}
+                  // loading={loading}
                 >
                   <Descriptions.Item label="ID">
-                    {testData.testId}
+                    {testData.testId || "N/A"}
                   </Descriptions.Item>
                   <Descriptions.Item label="Test Item">
-                    {testData.testItem}
+                    {testData.testItem || "N/A"}
                   </Descriptions.Item>
                   <Descriptions.Item label="Test Classification">
-                    {testData.testClassification}
+                    {testData.testClassification || "N/A"}
                   </Descriptions.Item>
                   <Descriptions.Item label="Environment Condition">
-                    {testData.environmentCondition}
+                    {testData.environmentCondition || "N/A"}
                   </Descriptions.Item>
                   <Descriptions.Item label="Input Data and Test Procedure">
-                    {testData.testProcedure}
+                    {testData.testProcedure || "N/A"}
                   </Descriptions.Item>
                   <Descriptions.Item label="Expected Output">
-                    {testData.expectedOutput}
+                    {testData.expectedOutput || "N/A"}
                   </Descriptions.Item>
                 </Descriptions>
 
                 <div className="space-y-4">
-
                   <div className="space-y-4">
                     <div className="flex flex-col items-center">
                       <Button
                         type="primary"
                         className="bg-blue-500 hover:bg-blue-600 w-64"
-                        onClick={() => {
-                          callPredictionAPI(setModelPrediction);
-                          // setModelPrediction("Sample model prediction result");
-                        }}
+                        onClick={callPredictionAPI}
+                        loading={loading}
+                        disabled={!selectedTest}
                       >
                         Prediction by Model
                       </Button>
@@ -247,6 +359,7 @@ const OpenEnv = (props: Props) => {
                             "Sample traditional prediction result"
                           );
                         }}
+                        disabled={!selectedTest}
                       >
                         Prediction by Traditional Method
                       </Button>
@@ -265,8 +378,88 @@ const OpenEnv = (props: Props) => {
               <SeleniumCodeEditor />
             </div>
           </TabPane>
+          
+          <TabPane tab="Image Viewer" key="3">
+            <div className="w-full p-6">
+              {selectedImage ? (
+                <div className="flex flex-col items-center w-full">
+                  <div className="bg-white rounded-lg shadow-md w-full max-w-4xl">
+                    <div className="flex justify-between items-center p-4 border-b">
+                      <h3 className="text-lg font-medium">{selectedImage.name}</h3>
+                      <div className="space-x-2">
+                        <Button
+                          type="text"
+                          onClick={() => {
+                            Modal.confirm({
+                              title: 'Đổi tên hình ảnh',
+                              content: (
+                                <div className="mt-2">
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-2 border rounded"
+                                    defaultValue={selectedImage.name}
+                                    id="imageRenameInput"
+                                  />
+                                </div>
+                              ),
+                              onOk: () => {
+                                const input = document.getElementById('imageRenameInput') as HTMLInputElement;
+                                if (input && input.value.trim()) {
+                                  handleRenameImage(selectedImage.id, input.value.trim());
+                                }
+                              }
+                            });
+                          }}
+                        >
+                          Đổi tên
+                        </Button>
+                        <Button
+                          type="text"
+                          danger
+                          onClick={() => handleDeleteImage(selectedImage.id)}
+                        >
+                          Xóa
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="h-[500px]">
+                      <ImageViewer 
+                        selectedImage={{
+                          imageUrl: selectedImage.imageUrl,
+                          name: selectedImage.name
+                        }}
+                        closeImage={() => {
+                          // Optional: You could navigate back to another tab here
+                          // or just set selectedImage to null
+                          // setActiveTab("1");
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-center items-center h-64 border rounded-lg bg-gray-50">
+                  <p className="text-gray-500">Chọn một hình ảnh từ danh sách bên trái để xem</p>
+                </div>
+              )}
+            </div>
+          </TabPane>
         </Tabs>
       </Content>
+
+      {/* Add Test Modal */}
+      <AddTestForm 
+        visible={isAddTestModalVisible}
+        onCancel={() => {
+          console.log("Canceling add test form");
+          setIsAddTestModalVisible(false);
+        }}
+        onSuccess={handleAddTestSuccess}
+        scenarioId={scenarioData?.id || null}
+        envId = {env || null}
+        exTest = {firstTestCase}
+      />
     </Layout>
   );
 };
