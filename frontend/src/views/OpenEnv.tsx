@@ -21,6 +21,10 @@ const OpenEnv = (props: Props) => {
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
   const [imageList, setImageList] = useState<TestImage[]>([]); 
   const [scenarioData, setScenarioData] = useState<TestScenario | null>(null);
+
+  //loading state
+  const [modelPred, setModelPred] = useState(false);
+  const [BFPred, setBFPred] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("1");
   const [selectedImage, setSelectedImage] = useState<TestImage | null>(null);
@@ -57,10 +61,11 @@ const OpenEnv = (props: Props) => {
       return;
     }
   
-    setLoading(true);
+    // setLoading(true);
     try {
       let response;
       if (method === "Model") {
+        setModelPred(true)
         response = await PredictionApi.callModelPrediction(testData);
         
         if (!response.success || !response.data) {
@@ -96,6 +101,7 @@ const OpenEnv = (props: Props) => {
         }
       } else {
         // Traditional method
+        setBFPred(true)
         response = await PredictionApi.callBFPrediction(testData);
         
         if (!response.success || !response.data) {
@@ -103,31 +109,20 @@ const OpenEnv = (props: Props) => {
         }
         
         // Extract response content
-        const responseData = response.data.data?.[0]?.response;
-  
-        if (!responseData) {
-          setTraditionalPrediction("Không có dữ liệu phản hồi.");
-          return;
-        }
-  
-        try {
-          // Parse the response data
-          const parsedResponse = JSON.parse(responseData);
-  
-          // Extract predictions and split by commas
-          const predictions = parsedResponse.predictions?.join(",") || "";
-          const splitPredictions = predictions.split(",");
-  
-          // Add numbering and line breaks
-          const formattedPredictions = splitPredictions
-            .map((step: string, index: number) => `${index + 1}. ${step.trim()}`)
-            .join("\n");
-  
-          // Update state with traditional prediction
-          setTraditionalPrediction(formattedPredictions);
-        } catch (parseError) {
-          console.error("Lỗi khi phân tích dữ liệu phản hồi:", parseError);
-          setTraditionalPrediction("Lỗi khi phân tích dữ liệu phản hồi.");
+        const predictionString = response.data;
+
+        // Check if the prediction string is not empty
+        if (predictionString && typeof predictionString === 'string') {
+          // Split the string by newline, and add numbering
+          const steps = predictionString.split('\n')
+            .filter(step => step.trim() !== '') // Remove empty lines
+            .map((step, index) => `${index + 1}. ${step.trim()}`)
+            .join('\n');
+
+          setTraditionalPrediction(steps);
+        } else {
+          // Fallback if prediction is empty or not a string
+          setTraditionalPrediction("Không có dữ liệu dự đoán.");
         }
       }
     } catch (error) {
@@ -138,7 +133,8 @@ const OpenEnv = (props: Props) => {
         setTraditionalPrediction(`Lỗi: ${error instanceof Error ? error.message : "Không xác định"}`);
       }
     } finally {
-      setLoading(false);
+      setBFPred(false);
+      setModelPred(false);
     }
   };
   // Handlers cho FolderTree
@@ -424,7 +420,7 @@ const OpenEnv = (props: Props) => {
                         type="primary"
                         className="bg-blue-500 hover:bg-blue-600 w-64"
                         onClick={() => callPredictionAPI("Model")}
-                        loading={loading}
+                        loading={modelPred}
                         disabled={!selectedTest}
                       >
                         Prediction by Model
@@ -438,6 +434,7 @@ const OpenEnv = (props: Props) => {
                         type="default"
                         className="border-blue-500 text-blue-500 hover:text-blue-600 hover:border-blue-600 w-64"
                         onClick={() => {callPredictionAPI("Traditional")}}
+                        loading={BFPred}
                         disabled={!selectedTest}
                       >
                         Prediction by Traditional Method
