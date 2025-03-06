@@ -20,8 +20,8 @@ interface FolderTreeProps {
   onImageSelect: (image: TestImage) => void;
   onAddTest: () => void;
   onAddImage: () => void;
-  onEditTest: (testKey: any) => void;
-  onDeleteTest: (testKey: any) => void;
+  onEditTest: (testKey: string) => void;
+  onDeleteTest: (testKey: string, testName: string) => void;
   onDeleteImage: (imageId: number) => void;
   onRenameImage?: (imageId: number, newName: string) => void;
 }
@@ -42,7 +42,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
   const [imageFolderOpen, setImageFolderOpen] = useState(true);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
-  const [contextMenuTarget, setContextMenuTarget] = useState<{ type: string; id: string | number } | null>(null);
+  const [contextMenuTarget, setContextMenuTarget] = useState<{ type: string; id: string ; name?: string } | null>(null);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [newImageName, setNewImageName] = useState('');
   const [currentImageId, setCurrentImageId] = useState<number | null>(null);
@@ -86,7 +86,8 @@ const FolderTree: React.FC<FolderTreeProps> = ({
   const handleContextMenu = (
     e: React.MouseEvent, 
     targetType: 'testFolder' | 'test' | 'imageFolder' | 'image', 
-    id?: string | number
+    id?: string | number,
+    name?: string
   ) => {
     e.preventDefault(); 
     e.stopPropagation();
@@ -94,7 +95,8 @@ const FolderTree: React.FC<FolderTreeProps> = ({
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
     setContextMenuTarget({ 
       type: targetType, 
-      id: id ? id.toString() : '' 
+      id: id ? id.toString() : '',
+      name: name 
     });
   };
 
@@ -102,7 +104,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
   const handleMenuClick = (action: string) => {
     if (!contextMenuTarget) return;
     
-    const { type, id } = contextMenuTarget;
+    const { type, id, name } = contextMenuTarget;
     
     switch (type) {
       case 'testFolder':
@@ -112,7 +114,10 @@ const FolderTree: React.FC<FolderTreeProps> = ({
         break;
       case 'test':
         if (action === 'edit') onEditTest(id);
-        else if (action === 'delete') onDeleteTest(id);
+        else if (action === 'delete') {
+          // Now passing both ID and testName to onDeleteTest
+          onDeleteTest(id, name || '');
+        }
         break;
       case 'imageFolder':
         if (action === 'upload') onAddImage();
@@ -222,7 +227,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
                 selectedItem === `test-${key}` ? 'bg-blue-100' : 'hover:bg-gray-100'
               }`}
               onClick={() => handleItemClick('test', key)}
-              onContextMenu={(e) => handleContextMenu(e, 'test', key)}
+              onContextMenu={(e) => handleContextMenu(e, 'test', key, test.testItem)}
             >
               <div className="flex items-center truncate">
                 <FileOutlined className="mr-2 text-gray-500" />
@@ -234,7 +239,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
                   size="small" 
                   icon={<MoreOutlined />}
                   onClick={(e) => {
-                    handleContextMenu(e,'test', key )
+                    handleContextMenu(e, 'test', key, test.testItem)
                     // e.stopPropagation()
                   }}
                 />
@@ -281,7 +286,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
                 selectedItem === `image-${image.id}` ? 'bg-blue-100' : 'hover:bg-gray-100'
               }`}
               onClick={() => handleItemClick('image', image.id)}
-              onContextMenu={(e) => handleContextMenu(e, 'image', image.id)}
+              onContextMenu={(e) => handleContextMenu(e, 'image', image.id, image.name)}
             >
               <div className="flex items-center truncate">
                 <FileImageOutlined className="mr-2 text-green-500" />
@@ -293,7 +298,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
                   size="small" 
                   icon={<MoreOutlined />}
                   onClick={(e) => {
-                    handleContextMenu(e, 'image', image.id)
+                    handleContextMenu(e, 'image', image.id, image.name)
                     // e.stopPropagation()
                   }}
                 />

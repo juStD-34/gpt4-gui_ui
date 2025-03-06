@@ -11,7 +11,8 @@ import { TestCase, TestImage, TestScenario } from "../types";
 import { TestCaseApi, ImageApi, PredictionApi } from "../utils/api";
 import AddTestForm from "../components/TestCase/AddTestForm";
 import ImageViewer from "../components/ImageViewer/ImageViewer";
-
+import EditTestForm from "../components/TestCase/EditTestForm";
+import UploadImageModal from "../components/ImageViewer/UploadImage";
 type Props = {};
 
 const OpenEnv = (props: Props) => {
@@ -23,7 +24,10 @@ const OpenEnv = (props: Props) => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("1");
   const [selectedImage, setSelectedImage] = useState<TestImage | null>(null);
+
   const [isAddTestModalVisible, setIsAddTestModalVisible] = useState(false);
+  const [isEditTestModalVisible, setIsEditTestModalVisible] = useState(false);
+  const [isUploadImageModalVisible, setIsUploadImageModalVisible] = useState(false);
 
   const { env } = (location.state as any) || {};
 
@@ -47,58 +51,99 @@ const OpenEnv = (props: Props) => {
   const [traditionalPrediction, setTraditionalPrediction] = useState<string>("");
 
   // Gọi API dự đoán 
-  const callPredictionAPI = async () => {
+  const callPredictionAPI = async (method: string) => {
     if (!selectedTest) {
       message.warning("Vui lòng chọn một test case để dự đoán");
       return;
     }
-
+  
     setLoading(true);
     try {
-      const response = await PredictionApi.callPrediction(testData);
-      
-      if (!response.success || !response.data) {
-        throw new Error(response.message || "Không thể lấy kết quả dự đoán");
-      }
-      
-      // Extract response content
-      const responseData = response.data.data?.[0]?.response;
-
-      if (!responseData) {
-        setModelPrediction("Không có dữ liệu phản hồi.");
-        return;
-      }
-
-      try {
-        // Parse the response data
-        const parsedResponse = JSON.parse(responseData);
-
-        // Extract predictions and split by commas
-        const predictions = parsedResponse.predictions?.join(",") || "";
-        const splitPredictions = predictions.split(",");
-
-        // Add numbering and line breaks
-        const formattedPredictions = splitPredictions
-          .map((step: string, index: number) => `${index + 1}. ${step.trim()}`)
-          .join("\n");
-
-        // Update state with formatted predictions
-        setModelPrediction(formattedPredictions);
-      } catch (parseError) {
-        console.error("Lỗi khi phân tích dữ liệu phản hồi:", parseError);
-        setModelPrediction("Lỗi khi phân tích dữ liệu phản hồi.");
+      let response;
+      if (method === "Model") {
+        response = await PredictionApi.callModelPrediction(testData);
+        
+        if (!response.success || !response.data) {
+          throw new Error(response.message || "Không thể lấy kết quả dự đoán");
+        }
+        
+        // Extract response content
+        const responseData = response.data.data?.[0]?.response;
+  
+        if (!responseData) {
+          setModelPrediction("Không có dữ liệu phản hồi.");
+          return;
+        }
+  
+        try {
+          // Parse the response data
+          const parsedResponse = JSON.parse(responseData);
+  
+          // Extract predictions and split by commas
+          const predictions = parsedResponse.predictions?.join(",") || "";
+          const splitPredictions = predictions.split(",");
+  
+          // Add numbering and line breaks
+          const formattedPredictions = splitPredictions
+            .map((step: string, index: number) => `${index + 1}. ${step.trim()}`)
+            .join("\n");
+  
+          // Update state with formatted predictions
+          setModelPrediction(formattedPredictions);
+        } catch (parseError) {
+          console.error("Lỗi khi phân tích dữ liệu phản hồi:", parseError);
+          setModelPrediction("Lỗi khi phân tích dữ liệu phản hồi.");
+        }
+      } else {
+        // Traditional method
+        response = await PredictionApi.callBFPrediction(testData);
+        
+        if (!response.success || !response.data) {
+          throw new Error(response.message || "Không thể lấy kết quả dự đoán");
+        }
+        
+        // Extract response content
+        const responseData = response.data.data?.[0]?.response;
+  
+        if (!responseData) {
+          setTraditionalPrediction("Không có dữ liệu phản hồi.");
+          return;
+        }
+  
+        try {
+          // Parse the response data
+          const parsedResponse = JSON.parse(responseData);
+  
+          // Extract predictions and split by commas
+          const predictions = parsedResponse.predictions?.join(",") || "";
+          const splitPredictions = predictions.split(",");
+  
+          // Add numbering and line breaks
+          const formattedPredictions = splitPredictions
+            .map((step: string, index: number) => `${index + 1}. ${step.trim()}`)
+            .join("\n");
+  
+          // Update state with traditional prediction
+          setTraditionalPrediction(formattedPredictions);
+        } catch (parseError) {
+          console.error("Lỗi khi phân tích dữ liệu phản hồi:", parseError);
+          setTraditionalPrediction("Lỗi khi phân tích dữ liệu phản hồi.");
+        }
       }
     } catch (error) {
-      console.error("Lỗi khi gọi API dự đoán:", error);
-      setModelPrediction(`Lỗi: ${error instanceof Error ? error.message : "Không xác định"}`);
+      console.error(`Lỗi khi gọi API dự đoán (${method}):`, error);
+      if (method === "Model") {
+        setModelPrediction(`Lỗi: ${error instanceof Error ? error.message : "Không xác định"}`);
+      } else {
+        setTraditionalPrediction(`Lỗi: ${error instanceof Error ? error.message : "Không xác định"}`);
+      }
     } finally {
       setLoading(false);
     }
   };
-
   // Handlers cho FolderTree
-  const handleTestSelect = (testKey: string) => {
-    setSelectedTest(testKey);
+  const handleTestSelect = (testId: string) => {
+    setSelectedTest(testId);
     // Reset các kết quả dự đoán khi chọn test case mới
     setModelPrediction("");
     setTraditionalPrediction("");
@@ -122,42 +167,54 @@ const OpenEnv = (props: Props) => {
     // Update the test list with the new test
     setTestList(prev => ({
       ...prev,
-      [newTest.testItem]: newTest
+      [newTest.id.toString()]: newTest
     }));
     
     // Select the newly added test
-    setSelectedTest(newTest.testItem);
+    setSelectedTest(newTest.id.toString());
     
     // Switch to the test details tab
     setActiveTab("1");
   };
-
-  const handleAddImage = () => {
-    // TODO: Implement giao diện upload hình ảnh
-    message.info("Tính năng thêm hình ảnh đang được phát triển");
-  };
-
-  const handleEditTest = (testKey: string) => {
+  const handleEditTest = (testId : string) => {
     // TODO: Implement giao diện chỉnh sửa test case
-    message.info(`Tính năng chỉnh sửa test case ${testKey} đang được phát triển`);
+    // message.info(`Tính năng chỉnh sửa test case ${testId} đang được phát triển`);
+    setIsEditTestModalVisible(true)
   };
 
-  const handleDeleteTest = (testKey: string) => {
+  const handleEditTestSuccess = (updatedTest: TestCase) => {
+    // Update the testList with the new test data
+    setTestList(prevTestList => ({
+      ...prevTestList,
+      [updatedTest.id.toString()]: updatedTest
+    }));
+    
+    // Set the selected test to the updated test
+    setSelectedTest(updatedTest.id.toString());
+    
+    // Switch to the test details tab
+    setActiveTab("1");
+    
+    // Show success message
+    message.success('Test case updated successfully');
+  };
+
+  const handleDeleteTest = (testId: string, testName: string) => {
     Modal.confirm({
       title: 'Xác nhận xóa',
-      content: `Bạn có chắc muốn xóa test case "${testKey}" không?`,
+      content: `Bạn có chắc muốn xóa test case "${testName}" không?`,
       onOk: async () => {
         try {
           setLoading(true);
-          const response = await TestCaseApi.deleteTestCase(testKey);
+          const response = await TestCaseApi.deleteTestCase(testId);
           
           if (response.success) {
             // Cập nhật danh sách test sau khi xóa
             const updatedTestList = { ...testList };
-            delete updatedTestList[testKey];
+            delete updatedTestList[testId];
             setTestList(updatedTestList);
             
-            if (selectedTest === testKey) {
+            if (selectedTest === testId) {
               setSelectedTest(null);
             }
             
@@ -174,6 +231,24 @@ const OpenEnv = (props: Props) => {
       },
     });
   };
+
+  const handleAddImage = () => {
+    // TODO: Implement giao diện upload hình ảnh
+    message.info("Tính năng thêm hình ảnh đang được phát triển");
+    setIsUploadImageModalVisible(true);
+  };
+
+  const handleAddImageSuccess = (newImage: TestImage) => {
+    // Cập nhật danh sách hình ảnh với ảnh mới
+    setImageList(prev => [...prev, newImage]);
+    
+    // Chọn ảnh mới được thêm vào
+    setSelectedImage(newImage);
+    
+    // Chuyển sang tab xem ảnh
+    setActiveTab("3");
+  };
+  
 
   const handleDeleteImage = (imageId: number) => {
     Modal.confirm({
@@ -197,7 +272,7 @@ const OpenEnv = (props: Props) => {
             
             message.success('Xóa hình ảnh thành công');
           } else {
-            throw new Error(response.message);
+            throw new Error(response.message || 'Không thể xóa hình ảnh');
           }
         } catch (error) {
           console.error("Lỗi khi xóa hình ảnh:", error);
@@ -208,7 +283,7 @@ const OpenEnv = (props: Props) => {
       },
     });
   };
-
+  
   const handleRenameImage = async (imageId: number, newName: string) => {
     try {
       setLoading(true);
@@ -217,18 +292,28 @@ const OpenEnv = (props: Props) => {
       if (response.success && response.data) {
         // Cập nhật danh sách hình ảnh sau khi đổi tên
         const updatedImageList = imageList.map(img => 
-          img.id === imageId ? { ...img, name: newName } : img
+          img.id === imageId ? { 
+            ...img, 
+            name: newName,
+            // Cập nhật imageUrl nếu API trả về URL mới
+            imageUrl: response.data.url || img.imageUrl
+          } : img
         );
         setImageList(updatedImageList);
         
         // Cập nhật selectedImage nếu đang xem ảnh đó
         if (selectedImage && selectedImage.id === imageId) {
-          setSelectedImage({...selectedImage, name: newName});
+          setSelectedImage({
+            ...selectedImage, 
+            name: newName,
+            // Cập nhật imageUrl nếu API trả về URL mới
+            imageUrl: response.data.url || selectedImage.imageUrl
+          });
         }
         
         message.success('Đổi tên hình ảnh thành công');
       } else {
-        throw new Error(response.message);
+        throw new Error(response.message || 'Không thể đổi tên hình ảnh');
       }
     } catch (error) {
       console.error("Lỗi khi đổi tên hình ảnh:", error);
@@ -338,7 +423,7 @@ const OpenEnv = (props: Props) => {
                       <Button
                         type="primary"
                         className="bg-blue-500 hover:bg-blue-600 w-64"
-                        onClick={callPredictionAPI}
+                        onClick={() => callPredictionAPI("Model")}
                         loading={loading}
                         disabled={!selectedTest}
                       >
@@ -352,13 +437,7 @@ const OpenEnv = (props: Props) => {
                       <Button
                         type="default"
                         className="border-blue-500 text-blue-500 hover:text-blue-600 hover:border-blue-600 w-64"
-                        onClick={() => {
-                          // TODO: API call will go here
-                          console.log("Predicting by Traditional method...");
-                          setTraditionalPrediction(
-                            "Sample traditional prediction result"
-                          );
-                        }}
+                        onClick={() => {callPredictionAPI("Traditional")}}
                         disabled={!selectedTest}
                       >
                         Prediction by Traditional Method
@@ -459,6 +538,29 @@ const OpenEnv = (props: Props) => {
         scenarioId={scenarioData?.id || null}
         envId = {env || null}
         exTest = {firstTestCase}
+      />
+
+      <EditTestForm
+      visible = {isEditTestModalVisible}
+      onCancel={()=>{
+        console.log("Canceling edit test form")
+        setIsEditTestModalVisible(false)
+      }}
+      onSuccess={handleEditTestSuccess}
+      scenarioId={selectedTest && testList[selectedTest] 
+      ? testList[selectedTest].id  : null}
+      envId={ env || null}
+      exTest={testList[selectedTest]}
+      />
+
+      <UploadImageModal
+        visible={isUploadImageModalVisible}
+        onCancel={() => {
+          console.log("Canceling upload image");
+          setIsUploadImageModalVisible(false);
+        }}
+        onSuccess={handleAddImageSuccess}
+        envId={env || null}
       />
     </Layout>
   );

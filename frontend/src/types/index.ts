@@ -21,3 +21,26 @@ export interface TestScenario {
   testData: TestCase[];
   images: TestImage[];
 }
+
+export interface ModelOption {
+  value: string;
+  label: string;
+}
+
+export interface ConfigOption {
+  value: number;
+  label: string;
+}
+
+export interface TrainingFormData {
+  trainingSet?: {
+    fileList: {
+      originFileObj: File;
+    }[];
+  };
+  epochs?: number;
+  modelType?: string[];
+  configId?: number;
+  loggingDirectory?: string;
+  outputDirectory?: string;
+}

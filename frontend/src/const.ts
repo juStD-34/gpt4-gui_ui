@@ -5,9 +5,12 @@ export const API_ENDPOINTS = {
     CREATE_ENV: `${API_HOST}/api/testing-environments/create-env`,
     ENV_DETAILS: `${API_HOST}/api/data/environment/`,
     PREDICTION: `${API_HOST}/api/model/prediction`,
+    BF_PRED: `${API_HOST}/generateTraditionalTestScript`,
+
     TRAIN: `${API_HOST}/api/model/train`,
+    TRAIN_LOGS: `${API_HOST}/api/model/training-logs`,
+    TRAIN_LOGS_WS: `${API_HOST}/api/model/training-logs`,
+
     SCENARIOS: `${API_HOST}/api/test-scenarios`,
-    UPLOAD_IMAGE:`${API_HOST}/api/images`,
-    DELETE_IMAGE:`${API_HOST}/api/images/delete`,
-    DELETE_SCEN: `${API_HOST}/api/data/test_script`
+    IMAGE:`${API_HOST}/api/images`,
 }

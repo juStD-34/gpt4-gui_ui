@@ -1,82 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, Button, message } from 'antd';
 import { TestCase } from '../../types/index';
 import { TestCaseApi } from '../../utils/api';
 
-
-interface AddTestFormProps {
+interface EditTestFormProps {
   visible: boolean;
   onCancel: () => void;
-  onSuccess: (newTest: TestCase) => void;
-  scenarioId: number | null;
-  envId : number | null;
+  onSuccess: (test: TestCase) => void;
   exTest: TestCase | null;
+  scenarioId: number | null;
+  envId: number | null;
 }
 
 const { TextArea } = Input;
 const { Option } = Select;
 
-const AddTestForm: React.FC<AddTestFormProps> = ({
+const EditTestForm: React.FC<EditTestFormProps> = ({
   visible,
   onCancel,
   onSuccess,
+  exTest,
   scenarioId,
-  envId, 
-  exTest
+  envId
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
-  // Reset form when modal opens or closes
-  React.useEffect(() => {
-    console.log("AddTestForm visible:", visible);
-    if (visible) {
-      form.resetFields();
-      
-      // Nếu có exTest, chỉ thiết lập giá trị cho trường websiteUrl
-      if (exTest) {
-        form.setFieldsValue({
-          websiteUrl: exTest.websiteUrl
-        });
-      }
+  // Set form values when modal opens or exTest changes
+  useEffect(() => {
+    if (visible && exTest) {
+      form.setFieldsValue({
+        testId: exTest.testId,
+        testItem: exTest.testItem,
+        testProcedure: exTest.testProcedure,
+        websiteUrl: exTest.websiteUrl,
+        testClassification: exTest.testClassification,
+        expectedOutput: exTest.expectedOutput,
+        environmentCondition: exTest.environmentCondition || 'N/A'
+      });
     }
-  }, [visible, form, exTest]);
+  }, [visible, exTest, form]);
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
       
-      if (!scenarioId) {
-        message.error('Không tìm thấy scenario ID');
+      if (!scenarioId || !exTest) {
+        message.error('Không tìm thấy thông tin test case hoặc scenario ID');
         return;
       }
 
       setLoading(true);
       
-      // Prepare test case data
-      const testCase: Partial<TestCase> = {
+      // Prepare updated test case data
+      const updatedTestCase: TestCase = {
+        ...exTest,
         testId: values.testId,
         testItem: values.testItem,
         testProcedure: values.testProcedure,
-        websiteUrl: exTest ? exTest.websiteUrl : values.websiteUrl, // Sử dụng giá trị từ exTest nếu có
+        websiteUrl: values.websiteUrl,
         testClassification: values.testClassification,
         expectedOutput: values.expectedOutput,
         environmentCondition: values.environmentCondition || 'N/A'
       };
 
-      // Call API to add test case
-      const response = await TestCaseApi.addTestCase(envId, testCase);
+      // Call API to update test case
+      const response = await TestCaseApi.updateTestCase(exTest.id, updatedTestCase);
+
       
       if (response.success && response.data) {
-        message.success('Thêm test case thành công');
+        message.success('Cập nhật test case thành công');
         onSuccess(response.data);
         onCancel(); // Close the modal
       } else {
-        throw new Error(response.message || 'Không thể thêm test case');
+        throw new Error(response.message || 'Không thể cập nhật test case');
       }
     } catch (error) {
-      console.error('Lỗi khi thêm test case:', error);
-      message.error(`Thêm test case thất bại: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`);
+      console.error('Lỗi khi cập nhật test case:', error);
+      message.error(`Cập nhật test case thất bại: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`);
     } finally {
       setLoading(false);
     }
@@ -84,9 +85,8 @@ const AddTestForm: React.FC<AddTestFormProps> = ({
 
   return (
     <Modal
-      title="Thêm Test Case Mới"
+      title="Chỉnh Sửa Test Case"
       open={visible}
-      visible={visible} // For compatibility with older Ant Design versions
       onCancel={onCancel}
       destroyOnClose={true}
       footer={[
@@ -100,7 +100,7 @@ const AddTestForm: React.FC<AddTestFormProps> = ({
           onClick={handleSubmit}
           className="bg-blue-500 hover:bg-blue-600"
         >
-          Thêm
+          Lưu Thay Đổi
         </Button>,
       ]}
       width={700}
@@ -117,7 +117,8 @@ const AddTestForm: React.FC<AddTestFormProps> = ({
             label="ID"
             rules={[{ required: true, message: 'Vui lòng nhập ID' }]}
           >
-            <Input placeholder="Nhập ID test case" />
+            <Input placeholder="Nhập ID test case"
+            disabled = {true} />
           </Form.Item>
 
           <Form.Item
@@ -125,7 +126,8 @@ const AddTestForm: React.FC<AddTestFormProps> = ({
             label="Test Item"
             rules={[{ required: true, message: 'Vui lòng nhập Test Item' }]}
           >
-            <Input placeholder="Nhập tên test item" />
+            <Input placeholder="Nhập tên test item"
+            disabled = {true} />
           </Form.Item>
         </div>
 
@@ -135,12 +137,15 @@ const AddTestForm: React.FC<AddTestFormProps> = ({
             label="Test Classification"
             rules={[{ required: true, message: 'Vui lòng chọn phân loại test' }]}
           >
-            <Select placeholder="Chọn phân loại">
+            {/* <Select placeholder="Chọn phân loại">
               <Option value="Normal">Normal</Option>
               <Option value="Exception">Exception</Option>
               <Option value="Boundary">Boundary</Option>
               <Option value="Performance">Performance</Option>
-            </Select>
+            </Select> */}
+            <Input placeholder='Test classification'
+            disabled={true}
+            />
           </Form.Item>
 
           <Form.Item
@@ -149,9 +154,8 @@ const AddTestForm: React.FC<AddTestFormProps> = ({
             rules={[{ required: true, message: 'Vui lòng nhập URL website' }]}
           >
             <Input 
-              placeholder="Nhập URL website" 
-              disabled={!!exTest} // Trường bị vô hiệu hóa nếu exTest tồn tại
-              className={!!exTest ? "bg-gray-100" : ""} 
+            placeholder="Nhập URL website" 
+            disabled = {true}
             />
           </Form.Item>
         </div>
@@ -189,4 +193,4 @@ const AddTestForm: React.FC<AddTestFormProps> = ({
   );
 };
 
-export default AddTestForm;
+export default EditTestForm;

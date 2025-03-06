@@ -114,7 +114,7 @@ export const TestCaseApi = {
     },
   
     // Update a test case
-    async updateTestCase(testId: string, testCase: Partial<TestCase>) {
+    async updateTestCase(testId: number, testCase: Partial<TestCase>) {
       try {
         const response = await fetch(`${API_ENDPOINTS.SCENARIOS}/${testId}`, {
           method: 'PUT',
@@ -143,19 +143,20 @@ export const TestCaseApi = {
 
 // API cho Images
 export const ImageApi = {
-  // Lấy danh sách images
-  fetchImages: async (envId: string) => {
-    return callApi<TestImage[]>(`${API_ENDPOINTS.SCENARIOS}?envId=${envId}`);
+  // Get all images for an environment
+  async fetchImages(envId: string) {
+    return callApi<TestImage[]>(`${API_ENDPOINTS.IMAGE}/${envId}`);
   },
   
-  // Thêm image mới (sử dụng FormData cho upload hình ảnh)
-  uploadImage: async (envId: string, imageFile: File) => {
+  // Upload a new image (using FormData for image upload)
+  async uploadImage(envId: string, imageFile: File, imageName: string) {
     const formData = new FormData();
     formData.append('file', imageFile);
-    formData.append('envId', envId);
+    formData.append('name', imageName);
+    formData.append('env_id', envId);
     
     try {
-      const response = await fetch(API_ENDPOINTS.SCENARIOS, {
+      const response = await fetch(API_ENDPOINTS.IMAGE, {
         method: 'POST',
         body: formData,
       });
@@ -175,21 +176,43 @@ export const ImageApi = {
     }
   },
   
-  // Đổi tên image
-  renameImage: async (imageId: number, newName: string) => {
-    return callApi<TestImage>(`${API_ENDPOINTS.SCENARIOS}/${imageId}`, 'PUT', { name: newName });
+  // Rename image
+  async renameImage(imageId: number, newName: string) {
+    try {
+      // Sử dụng URLSearchParams thay vì FormData vì chỉ cần gửi tham số đơn giản
+      const url = `${API_ENDPOINTS.IMAGE}/${imageId}?name=${encodeURIComponent(newName)}`;
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return { success: true, data };
+    } catch (error) {
+      console.error('Rename image error:', error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error occurred' 
+      };
+    }
   },
-  
-  // Xóa image
-  deleteImage: async (imageId: number) => {
-    return callApi<void>(`${API_ENDPOINTS.SCENARIOS}/${imageId}`, 'DELETE');
+  // Delete image - Note: You need to implement this endpoint in your backend
+  async deleteImage(imageId: number) {
+    return callApi<void>(`${API_ENDPOINTS.IMAGE}/${imageId}`, 'DELETE');
   },
 };
 
 // API cho Prediction
 export const PredictionApi = {
   // Gọi prediction API
-  callPrediction: async (testData: TestCase) => {
+  callModelPrediction: async (testData: TestCase) => {
     const payload = {
       config_id: 1, // TODO: Set từ config
       pred_list: [
@@ -204,6 +227,32 @@ export const PredictionApi = {
     
     return callApi<any>(API_ENDPOINTS.PREDICTION, 'POST', payload);
   },
+  callBFPrediction: async( test: TestCase) =>{
+    try {
+      // Tạo URL với query parameters
+      const url = new URL(API_ENDPOINTS.BF_PRED);
+      url.searchParams.append('testData', test.testProcedure);
+      url.searchParams.append('iconElementId', 'icon_id');
+      
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      // API trả về plain text nên không cần parse JSON
+      const data = await response.text();
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error calling BF prediction API:', error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error occurred' 
+      };
+    }
+  }
 };
 
 export default {
