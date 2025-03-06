@@ -16,6 +16,7 @@ import {
 const { TabPane } = Tabs;
 
 interface TrainingLogProps {
+  configId?: number;
   trainingId?: string; // ID of the current training session
   isTraining: boolean;  // Whether training is in progress
   onError?: (message: string) => void; // Callback for errors
@@ -31,6 +32,7 @@ interface LossDataPoint {
 }
 
 const TrainingLog: React.FC<TrainingLogProps> = ({ 
+  configId = 1,
   trainingId, 
   isTraining,
   onError,
@@ -44,40 +46,9 @@ const TrainingLog: React.FC<TrainingLogProps> = ({
   const [chartData, setChartData] = useState<LossDataPoint[]>([]);
   const [xAxisType, setXAxisType] = useState<'step' | 'epoch'>('step');
   const logEndRef = useRef<HTMLDivElement>(null);
-  const pollingIntervalRef = useRef<number | null>(null);
-  const socketRef = useRef<WebSocket | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   
-  // Function to fetch logs from server
-  const fetchLogs = async () => {
-    if (!trainingId) return;
-    
-    try {
-      const response = await fetch(`${API_ENDPOINTS.TRAIN_LOGS}/${trainingId}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.message || 'Failed to fetch logs');
-      }
-      
-      if (data.logs && Array.isArray(data.logs)) {
-        setLogs(data.logs);
-        processLogsForChart(data.logs);
-      }
-      
-      setError(null);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(`Error fetching logs: ${errorMessage}`);
-      if (onError) onError(errorMessage);
-    }
-  };
-
-  // Parse logs to extract loss information for chart
+  // Function to process logs for chart data
   const processLogsForChart = (logEntries: string[]) => {
     if (logEntries.length === 0) return;
     
@@ -127,9 +98,55 @@ const TrainingLog: React.FC<TrainingLogProps> = ({
     }
   };
 
-  // Monitor logs for completion or error messages
-  useEffect(() => {
-    if (!isTraining || logs.length === 0) return;
+  // Function to process a single log line for chart data
+  const processLogForChart = (logLine: string) => {
+    try {
+      console.log("Entry process single log for chart data")
+      if (logLine.includes('{') && logLine.includes('}')) {
+        // Extract the JSON part from the log line
+        const jsonMatch = logLine.match(/\{[^}]+\}/);
+        
+        if (jsonMatch) {
+          const jsonStr = jsonMatch[0];
+          const logObj = JSON.parse(jsonStr);
+          
+          // Ensure we have all required fields and loss is a number
+          if (
+            logObj && 
+            'step' in logObj && 
+            'epoch' in logObj && 
+            'loss' in logObj && 
+            !isNaN(Number(logObj.loss))
+          ) {
+            setChartData(prevData => {
+              // Check if we already have this step in our data
+              const exists = prevData.some(item => item.step === Number(logObj.step));
+              if (exists) {
+                return prevData;
+              }
+              
+              // Add the new data point and sort by step
+              const newData = [
+                ...prevData, 
+                {
+                  step: Number(logObj.step),
+                  epoch: Number(logObj.epoch),
+                  loss: Number(logObj.loss)
+                }
+              ];
+              return newData.sort((a, b) => a.step - b.step);
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Error processing log for chart:', error);
+    }
+  };
+  
+  // Function to check log for training completion or errors
+  const checkLogForCompletionOrErrors = (log: string) => {
+    if (!isTraining) return;
     
     // Check for error indicators
     const errorIndicators = [
@@ -140,15 +157,21 @@ const TrainingLog: React.FC<TrainingLogProps> = ({
       "cuda error"
     ];
     
-    const hasTrainingErrors = logs.some(log => 
-      errorIndicators.some(indicator => 
-        log.toLowerCase().includes(indicator.toLowerCase())
-      )
+    const hasTrainingErrors = errorIndicators.some(indicator => 
+      log.toLowerCase().includes(indicator.toLowerCase())
     );
     
-    if (hasTrainingErrors && onTrainingError) {
-      console.log("Training errors detected in logs");
-      onTrainingError();
+    if (hasTrainingErrors) {
+      console.log("Training errors detected in logs:", log);
+      if (onTrainingError) onTrainingError();
+      
+      // Close EventSource on training error
+      if (eventSourceRef.current) {
+        console.log("Closing EventSource due to training error");
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      
       return; // Don't check for completion if errors are found
     }
     
@@ -159,144 +182,159 @@ const TrainingLog: React.FC<TrainingLogProps> = ({
       "training completed"
     ];
     
-    const isTrainingComplete = logs.some(log => 
-      completionIndicators.some(indicator => 
-        log.toLowerCase().includes(indicator.toLowerCase())
-      )
+    const isTrainingComplete = completionIndicators.some(indicator => 
+      log.toLowerCase().includes(indicator.toLowerCase())
     );
     
-    if (isTrainingComplete && onTrainingComplete) {
-      console.log("Training completion detected in logs");
-      onTrainingComplete();
+    if (isTrainingComplete) {
+      console.log("Training completion detected in logs:", log);
+      if (onTrainingComplete) onTrainingComplete();
+      
+      // Close EventSource on training completion
+      if (eventSourceRef.current) {
+        console.log("Closing EventSource due to training completion");
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     }
-  }, [logs, isTraining, onTrainingError, onTrainingComplete]);
+  };
 
-  // Setup WebSocket connection or polling for real-time logs
+  // Setup SSE connection when training starts
   useEffect(() => {
-    // Clear any previous connections
-    if (socketRef.current) {
-      socketRef.current.close();
-      socketRef.current = null;
+    // Cleanup previous connections
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
-    
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-    
-    // If not training or no training ID, don't establish connections
+    console.log("TrainingLog useEffect triggered with:", { trainingId, isTraining });
+    // Only establish connection if we have a training ID and training is in progress
     if (!trainingId || !isTraining) {
+      console.log("Not establishing SSE connection - missing trainingId or not training");
       return;
     }
     
+    // Reset state for new training session
+    setLogs([]);
+    setChartData([]);
+    setError(null);
+    // if (isTraining) {
+    //   setLogs([]);
+    //   setChartData([]);
+    //   setError(null);
+    // }
+    
     setLoading(true);
     
-    // Try to establish WebSocket connection first
     try {
-      const wsUrl = API_ENDPOINTS.TRAIN_LOGS_WS?.replace('http', 'ws');
+      const sseUrl = API_ENDPOINTS.TRAIN_LOGS;
+      console.log(`Establishing SSE connection to: ${sseUrl}/${trainingId}/stream?configId=${configId}`);
       
-      if (wsUrl) {
-        const socket = new WebSocket(`${wsUrl}/${trainingId}`);
-        socketRef.current = socket;
+      const eventSource = new EventSource(
+        `${sseUrl}/${trainingId}/stream?configId=${configId}`
+      );
+      
+      eventSource.onopen = () => {
+        console.log('SSE connection established');
+        setLoading(false);
+      };
+      
+      eventSource.onerror = (error) => {
+        console.error('SSE connection error:', error);
+        setError('SSE connection error. Please check your network connection.');
         
-        socket.onopen = () => {
-          console.log('WebSocket connection established');
-          setLoading(false);
-        };
-        
-        socket.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            let newLogs: string[] = [];
+        // Close the failed connection
+        eventSource.close();
+        eventSourceRef.current = null;
+      };
+      
+      // Handle incoming general events
+      eventSource.onmessage = (event) => {
+        try {
+          const data = event.data;
+          
+          // Add the log to the existing logs
+          setLogs(prevLogs => {
+            // Avoid duplicate logs
+            if (prevLogs.includes(data)) {
+              return prevLogs;
+            }
+            const newLogs = [...prevLogs, data];
             
-            if (data.logs) {
-              newLogs = data.logs;
-            } else if (data.log) {
-              newLogs = [data.log];
-            } else {
-              newLogs = [event.data];
+            // Check for completion or errors
+            checkLogForCompletionOrErrors(data);
+            
+            return newLogs;
+          });
+      
+          // Process for chart if it contains loss data
+          processLogForChart(data);
+        } catch (error) {
+          console.error('Error processing event message:', error);
+          setError(`Error processing event message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      };
+
+      // Handle history events (receives bulk logs when first connecting)
+      eventSource.addEventListener('history', (event) => {
+        try {
+          const historyLogs = JSON.parse(event.data);
+          if (Array.isArray(historyLogs)) {
+            setLogs(prevLogs => {
+              // Combine previous logs with new history logs, removing duplicates
+              const combinedLogs = [...new Set([...prevLogs, ...historyLogs])];
+              return combinedLogs;
+            });
+            
+            // Process all logs for the chart
+            processLogsForChart(historyLogs);
+            
+            // Check each log for completion or errors
+            historyLogs.forEach(log => checkLogForCompletionOrErrors(log));
+          }
+        } catch (error) {
+          console.error('Error processing history event:', error);
+        }
+      });
+      
+      // Handle specific log events
+      eventSource.addEventListener('log', (event) => {
+        try {
+          const logData = event.data;
+          
+          // Add the log to the existing logs
+          setLogs(prevLogs => {
+            // Avoid duplicate logs
+            if (prevLogs.includes(logData)) {
+              return prevLogs;
             }
             
-            setLogs(prevLogs => {
-              const updatedLogs = [...prevLogs, ...newLogs];
-              processLogsForChart(updatedLogs);
-              return updatedLogs;
-            });
-          } catch (err) {
-            // If not JSON, assume it's a plain text log
-            setLogs(prevLogs => {
-              const updatedLogs = [...prevLogs, event.data];
-              processLogsForChart(updatedLogs);
-              return updatedLogs;
-            });
-          }
-        };
-        
-        socket.onerror = (err) => {
-          console.error('WebSocket error:', err);
-          setError('WebSocket connection error. Falling back to polling.');
-          socket.close();
-          socketRef.current = null;
+            // Check for completion or errors
+            checkLogForCompletionOrErrors(logData);
+            
+            return [...prevLogs, logData];
+          });
           
-          // Fall back to polling if WebSocket fails
-          startPolling();
-        };
-        
-        socket.onclose = () => {
-          console.log('WebSocket connection closed');
-          socketRef.current = null;
-          // If training is still in progress, fall back to polling
-          if (isTraining) {
-            startPolling();
-          }
-        };
-      } else {
-        // If WebSocket URL is not defined, fall back to polling
-        startPolling();
-      }
-    } catch (err) {
-      console.error('Error setting up WebSocket:', err);
-      // Fall back to polling if WebSocket setup fails
-      startPolling();
-    }
-    
-    // Polling function
-    function startPolling() {
-      setLoading(false);
-      
-      // Don't start polling if not training or already polling
-      if (!isTraining || pollingIntervalRef.current) return;
-      
-      // Initial fetch
-      fetchLogs();
-      
-      // Setup polling interval (every 2 seconds)
-      const intervalId = window.setInterval(() => {
-        if (isTraining) {
-          fetchLogs();
-        } else {
-          // Stop polling if training is no longer in progress
-          clearInterval(intervalId);
-          pollingIntervalRef.current = null;
+          // Process for chart
+          processLogForChart(logData);
+        } catch (error) {
+          console.error('Error processing log event:', error);
         }
-      }, 2000);
+      });
+
+      // Store reference to close it later
+      eventSourceRef.current = eventSource;
       
-      pollingIntervalRef.current = intervalId;
+      // Cleanup function
+      return () => {
+        eventSource.close();
+        eventSourceRef.current = null;
+      };
+    } catch (err) {
+      console.error('Error setting up SSE:', err);
+      setLoading(false);
+      setError(`Failed to establish connection: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
-    
-    // Cleanup function for the useEffect
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
-      
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    };
-  }, [trainingId, isTraining]);
+  }, [trainingId, isTraining, configId]);
   
   // Auto-scroll to bottom when logs update
   useEffect(() => {
@@ -305,22 +343,47 @@ const TrainingLog: React.FC<TrainingLogProps> = ({
     }
   }, [logs, activeTab]);
   
-  // Clean up polling/websocket on unmount
+  // Clean up on unmount
   useEffect(() => {
     return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
-      }
-      
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
     };
   }, []);
   
-  // Handle manual refresh
-  const handleRefresh = () => {
-    fetchLogs();
+  // Handle manual refresh (fetch current logs from server)
+  const handleRefresh = async () => {
+    if (!trainingId) return;
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_ENDPOINTS.TRAIN_LOGS}/${trainingId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.message || 'Failed to fetch logs');
+      }
+      
+      if (data.logs && Array.isArray(data.logs)) {
+        setLogs(data.logs);
+        processLogsForChart(data.logs);
+      }
+      
+      setError(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(`Error fetching logs: ${errorMessage}`);
+      if (onError) onError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
   
   // Handle log download

@@ -54,74 +54,57 @@ const TrainModel: React.FC = () => {
       message.error("Please select a training file");
       return;
     }
-
+  
     if (!values.modelType || values.modelType.length === 0) {
       message.error("Please select a model type");
       return;
     }
-
+  
+    // Tạo trainingId ngay từ frontend
+    const newTrainingId = `training-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    
+    // Thiết lập trainingId và trạng thái training trước khi gọi API
+    setTrainingId(newTrainingId);
     setIsSubmitting(true);
-
+    
+    // Chuyển đến tab logs ngay lập tức
+    setActiveTab("trainingLogs");
+  
     try {
-      // Create FormData object
+      // Tạo FormData object
       const formData = new FormData();
-
-      // Append file
       formData.append("file", values.trainingSet.fileList[0].originFileObj);
-
-      // Get model type (take the first one if multiple are selected)
-      const modelTypeValue = Array.isArray(values.modelType) ? values.modelType[0] : values.modelType;
       
-      // Append other form fields
+      const modelTypeValue = Array.isArray(values.modelType) ? values.modelType[0] : values.modelType;
       formData.append("modelType", modelTypeValue);
       formData.append("epochs", String(values.epochs || 1));
       formData.append("outputDir", values.outputDirectory || "");
       formData.append("loggingDir", values.loggingDirectory || "");
       formData.append("configId", String(values.configId || 1));
-
-      // Switch to training logs tab
-      setActiveTab("trainingLogs");
-
+      formData.append("trainingId", newTrainingId); // Gửi trainingId xuống backend
+  
       const response = await fetch(API_ENDPOINTS.TRAIN, {
         method: "POST",
         body: formData,
       });
-
+  
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
       }
-
+  
       const data = await response.json();
       
       if (data.error) {
         throw new Error(data.message || "Training failed");
       }
       
-      // Store the training ID received from the server
-      if (data.trainingId) {
-        setTrainingId(data.trainingId);
-        if (data.message && typeof data.message === 'string') {
-          const lowerCaseMessage = data.message.toLowerCase();
-          if (lowerCaseMessage.includes("training complete") || 
-              lowerCaseMessage.includes("training finished") ||
-              lowerCaseMessage.includes("training completed")) {
-            // Training is already complete
-            message.success("Training completed successfully!");
-            setIsSubmitting(false);
-          } else {
-            // Training is still in progress
-            message.success("Training started successfully!");
-          }
-        }
-      } else {
-        message.warning("Training started, but no training ID was provided. Log updates may not be available.");
-      }
+      message.success("Training started successfully!");
     } catch (error) {
       console.error("API Error:", error);
       message.error("Failed to start training: " + (error instanceof Error ? error.message : "Unknown error"));
       setIsSubmitting(false);
+      // Không cần reset trainingId vì user có thể muốn xem logs bất kể lỗi API
     }
-    // Note: We don't set isSubmitting to false here because we want the form to remain disabled while training is in progress
   };
 
   // Handle training log errors
