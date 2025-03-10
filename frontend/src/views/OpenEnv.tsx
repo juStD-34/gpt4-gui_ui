@@ -113,13 +113,13 @@ const OpenEnv = (props: Props) => {
 
         // Check if the prediction string is not empty
         if (predictionString && typeof predictionString === 'string') {
-          // Split the string by newline, and add numbering
-          const steps = predictionString.split('\n')
-            .filter(step => step.trim() !== '') // Remove empty lines
-            .map((step, index) => `${index + 1}. ${step.trim()}`)
-            .join('\n');
-
-          setTraditionalPrediction(steps);
+          // const formattedSteps = predictionString
+          //   .replace(/(\d+\.\s)/g, (match, p1, offset) => {
+          //     // Don't add newline before the very first step
+          //     return offset === 0 ? p1 : '\n' + p1;
+          //   });
+        
+          setTraditionalPrediction(predictionString);
         } else {
           // Fallback if prediction is empty or not a string
           setTraditionalPrediction("Không có dữ liệu dự đoán.");
@@ -439,7 +439,7 @@ const OpenEnv = (props: Props) => {
                       >
                         Prediction by Traditional Method
                       </Button>
-                      <div className="mt-2 min-h-[100px] border rounded-lg p-4 w-full">
+                      <div className="mt-2 min-h-[100px] border rounded-lg p-4 w-full whitespace-pre-wrap">
                         {traditionalPrediction}
                       </div>
                     </div>

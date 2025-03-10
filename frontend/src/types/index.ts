@@ -44,3 +44,11 @@ export interface TrainingFormData {
   loggingDirectory?: string;
   outputDirectory?: string;
 }
+
+
+export interface Config {
+  id: number;
+  configName: string;
+  envId: number;
+  properties: Record<string, any>;
+}

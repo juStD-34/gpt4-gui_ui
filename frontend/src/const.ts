@@ -13,4 +13,6 @@ export const API_ENDPOINTS = {
 
     SCENARIOS: `${API_HOST}/api/test-scenarios`,
     IMAGE:`${API_HOST}/api/images`,
+
+    CONFIG:`${API_HOST}/api/config`,
 }

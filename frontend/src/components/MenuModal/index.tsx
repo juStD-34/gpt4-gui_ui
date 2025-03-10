@@ -4,8 +4,9 @@ import { MENU_ACTION } from "./modalComponents/modalComponents";
 
 type MenuModalProps = {
   isShowModal: boolean;
-  onCancel: () => void;
+  onCancel: (shouldReload?: boolean) => void;
   selectedMenuItem: string | null;
+  configData?: any;
 };
 
 export const ModalContext = React.createContext({
@@ -17,19 +18,21 @@ export const ModalContext = React.createContext({
     }
   },
   selectedMenuItem: null,
+  configData: null as any,
 });
 
 const MenuModal: React.FC<MenuModalProps> = ({
   isShowModal,
   onCancel,
   selectedMenuItem,
+  configData,
 }) => {
   return (
-    <ModalContext.Provider value={{ isShowModal, onCancel, selectedMenuItem }}>
+    <ModalContext.Provider value={{ isShowModal, onCancel, selectedMenuItem, configData }}>
       <Modal
         title={MENU_ACTION[selectedMenuItem || ""]?.title}
         open={isShowModal}
-        onCancel={onCancel}
+        onCancel={() => onCancel()}
         footer={null}
         width={600}
       >

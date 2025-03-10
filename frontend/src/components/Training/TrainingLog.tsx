@@ -101,11 +101,11 @@ const TrainingLog: React.FC<TrainingLogProps> = ({
   // Function to process a single log line for chart data
   const processLogForChart = (logLine: string) => {
     try {
-      console.log("Entry process single log for chart data")
+      console.log("Entry process single log for chart data: ", logLine)
       if (logLine.includes('{') && logLine.includes('}')) {
         // Extract the JSON part from the log line
         const jsonMatch = logLine.match(/\{[^}]+\}/);
-        
+        console.log("jsonMatch", jsonMatch)
         if (jsonMatch) {
           const jsonStr = jsonMatch[0];
           const logObj = JSON.parse(jsonStr);
@@ -118,6 +118,7 @@ const TrainingLog: React.FC<TrainingLogProps> = ({
             'loss' in logObj && 
             !isNaN(Number(logObj.loss))
           ) {
+            console.log(logObj, "LOG OBJ")
             setChartData(prevData => {
               // Check if we already have this step in our data
               const exists = prevData.some(item => item.step === Number(logObj.step));

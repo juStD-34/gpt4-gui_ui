@@ -23,6 +23,7 @@ import { faCode, faChartBar, faTerminal } from "@fortawesome/free-solid-svg-icon
 import { API_ENDPOINTS } from "../const";
 import { ModelOption, ConfigOption, TrainingFormData  } from "../types";
 import TrainingLog from "../components/Training/TrainingLog";
+import { useConfig } from "../context/ConfigContext";
 
 const { Sider, Content } = Layout;
 const { TextArea } = Input;
@@ -32,13 +33,15 @@ const { Title, Text } = Typography;
 // Define proper types
 
 const TrainModel: React.FC = () => {
+  const {configId, selectedConfig} = useConfig();
+
   const [form] = Form.useForm();
   const [activeTab, setActiveTab] = useState<string>("jsonContent");
   const [jsonContent, setJsonContent] = useState<string>("");
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([
-    { value: "codeT5Small", label: "CodeT5 Small" },
-    { value: "codeT5Base", label: "CodeT5 Base" },
-    { value: "codeT5Large", label: "CodeT5 Large" },
+    { value: "Salesforce/codet5-small", label: "CodeT5 Small" },
+    { value: "Salesforce/codet5-base", label: "CodeT5 Base" },
+    { value: "Salesforce/codet5-large", label: "CodeT5 Large" },
   ]);
   const [inputValue, setInputValue] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -80,7 +83,7 @@ const TrainModel: React.FC = () => {
       formData.append("epochs", String(values.epochs || 1));
       formData.append("outputDir", values.outputDirectory || "");
       formData.append("loggingDir", values.loggingDirectory || "");
-      formData.append("configId", String(values.configId || 1));
+      formData.append("configId", String(configId));
       formData.append("trainingId", newTrainingId); // Gửi trainingId xuống backend
   
       const response = await fetch(API_ENDPOINTS.TRAIN, {
@@ -89,6 +92,7 @@ const TrainModel: React.FC = () => {
       });
   
       if (!response.ok) {
+        setIsSubmitting(false)
         throw new Error(`HTTP error: ${response.status}`);
       }
   
@@ -97,7 +101,7 @@ const TrainModel: React.FC = () => {
       if (data.error) {
         throw new Error(data.message || "Training failed");
       }
-      
+      setIsSubmitting(false)
       message.success("Training started successfully!");
     } catch (error) {
       console.error("API Error:", error);
