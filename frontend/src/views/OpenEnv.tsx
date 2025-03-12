@@ -14,6 +14,7 @@ import ImageViewer from "../components/ImageViewer/ImageViewer";
 import EditTestForm from "../components/TestCase/EditTestForm";
 import UploadImageModal from "../components/ImageViewer/UploadImage";
 import TestCaseViewer from "../components/TestCase/TestCaseViewer";
+import { useConfig } from '../context/ConfigContext';
 
 type Props = {};
 
@@ -23,6 +24,7 @@ const OpenEnv = (props: Props) => {
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
   const [imageList, setImageList] = useState<TestImage[]>([]); 
   const [scenarioData, setScenarioData] = useState<TestScenario | null>(null);
+  const {configId, selectedConfig} = useConfig();
 
   //loading state
   const [modelPred, setModelPred] = useState(false);
@@ -63,12 +65,18 @@ const OpenEnv = (props: Props) => {
       return;
     }
   
-    // setLoading(true);
     try {
       let response;
+      const hasImages = testData.testProcedure?.includes('[IMG:');
+      
       if (method === "Model") {
-        setModelPred(true)
-        response = await PredictionApi.callModelPrediction(testData);
+        setModelPred(true);
+        
+        // Determine if we should use image-based prediction
+        const predictionType = hasImages ? 'withImage' : 'standard';
+        console.log(predictionType, "TYPE")
+        // Call the appropriate prediction method with type
+        response = await PredictionApi.callModelPrediction(testData, predictionType, Number(configId));
         
         if (!response.success || !response.data) {
           throw new Error(response.message || "Không thể lấy kết quả dự đoán");
@@ -103,7 +111,9 @@ const OpenEnv = (props: Props) => {
         }
       } else {
         // Traditional method
-        setBFPred(true)
+        setBFPred(true);
+        
+        // Call traditional prediction method (BrainFlow)
         response = await PredictionApi.callBFPrediction(testData);
         
         if (!response.success || !response.data) {
@@ -112,15 +122,9 @@ const OpenEnv = (props: Props) => {
         
         // Extract response content
         const predictionString = response.data;
-
+  
         // Check if the prediction string is not empty
         if (predictionString && typeof predictionString === 'string') {
-          // const formattedSteps = predictionString
-          //   .replace(/(\d+\.\s)/g, (match, p1, offset) => {
-          //     // Don't add newline before the very first step
-          //     return offset === 0 ? p1 : '\n' + p1;
-          //   });
-        
           setTraditionalPrediction(predictionString);
         } else {
           // Fallback if prediction is empty or not a string

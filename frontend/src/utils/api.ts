@@ -1,11 +1,14 @@
 import { TestCase, TestImage } from '../types';
 import { API_ENDPOINTS } from '../const';
+// import { useConfig } from '../context/ConfigContext';
 
 interface ApiResponse<T> {
   success: boolean;
   data?: T;
   message?: string;
 }
+
+// const {configId, selectedConfig} = useConfig();
 
 const callApi = async <T>(
   url: string, 
@@ -212,20 +215,40 @@ export const ImageApi = {
 // API cho Prediction
 export const PredictionApi = {
   // Gọi prediction API
-  callModelPrediction: async (testData: TestCase) => {
-    const payload = {
-      config_id: 1, // TODO: Set từ config
-      pred_list: [
-        {
-          testItem: testData.testItem,
-          testProcedure: testData.testProcedure,
-          expectedOutput: testData.expectedOutput,
-          environmentCondition: testData.environmentCondition,
-        },
-      ],
-    };
-    
-    return callApi<any>(API_ENDPOINTS.PREDICTION, 'POST', payload);
+  callModelPrediction: async (testData: TestCase, predictionType: 'standard' | 'withImage' = 'standard', configId: number) => {
+    try {
+      // Extract image references from test procedure if using image prediction
+      let imageReferences = [];
+      if (predictionType === 'withImage') {
+        imageReferences = extractImageReferences(testData.testProcedure);
+      }
+      
+      // Prepare base payload
+      const payload = {
+        config_id: configId, // TODO: Set from config
+        pred_list: [
+          {
+            testItem: testData.testItem,
+            testProcedure: testData.testProcedure,
+            expectedOutput: testData.expectedOutput,
+            environmentCondition: testData.environmentCondition,
+            websiteUrl: testData.websiteUrl,
+            predictionType: predictionType,
+            // Only include imageReferences if using image prediction
+            ...(predictionType === 'withImage' && { imageReferences })
+          },
+        ],
+      };
+      
+      // Make API call
+      return callApi<any>(API_ENDPOINTS.PREDICTION, 'POST', payload);
+    } catch (error) {
+      console.error("Error in model prediction:", error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error occurred' 
+      };
+    }
   },
   callBFPrediction: async( test: TestCase) =>{
     try {
@@ -260,3 +283,22 @@ export default {
   ImageApi,
   PredictionApi,
 };
+
+
+// Helper function to extract image references from test procedure text
+function extractImageReferences(testProcedure: string): Array<{id: number, text: string}> {
+  const imageReferences = [];
+  
+  // Match [IMG:id:text] format
+  const imageRegex = /\[IMG:(\d+):([^\]]+)\]/g;
+  let match;
+  
+  while ((match = imageRegex.exec(testProcedure)) !== null) {
+    imageReferences.push({
+      id: parseInt(match[1]),
+      text: match[2]
+    });
+  }
+  
+  return imageReferences;
+}
