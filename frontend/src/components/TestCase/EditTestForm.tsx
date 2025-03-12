@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, Button, message } from 'antd';
-import { TestCase } from '../../types/index';
+import { TestCase, TestImage } from '../../types/index';
 import { TestCaseApi } from '../../utils/api';
+import TestProcedureEditor from './TestProcedureEditor';
 
 interface EditTestFormProps {
   visible: boolean;
@@ -10,6 +11,7 @@ interface EditTestFormProps {
   exTest: TestCase | null;
   scenarioId: number | null;
   envId: number | null;
+  imageList: TestImage[]
 }
 
 const { TextArea } = Input;
@@ -21,7 +23,8 @@ const EditTestForm: React.FC<EditTestFormProps> = ({
   onSuccess,
   exTest,
   scenarioId,
-  envId
+  envId,
+  imageList
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -172,9 +175,10 @@ const EditTestForm: React.FC<EditTestFormProps> = ({
           label="Input Data and Test Procedure"
           rules={[{ required: true, message: 'Vui lòng nhập quy trình test' }]}
         >
-          <TextArea 
-            rows={6} 
-            placeholder="Nhập các bước thực hiện test case (mỗi bước một dòng)" 
+          <TestProcedureEditor 
+            value={form.getFieldValue('testProcedure') || ''}
+            onChange={(value) => form.setFieldsValue({ testProcedure: value })}
+            imageList={imageList}
           />
         </Form.Item>
 

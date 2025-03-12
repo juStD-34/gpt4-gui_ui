@@ -13,6 +13,8 @@ import AddTestForm from "../components/TestCase/AddTestForm";
 import ImageViewer from "../components/ImageViewer/ImageViewer";
 import EditTestForm from "../components/TestCase/EditTestForm";
 import UploadImageModal from "../components/ImageViewer/UploadImage";
+import TestCaseViewer from "../components/TestCase/TestCaseViewer";
+
 type Props = {};
 
 const OpenEnv = (props: Props) => {
@@ -406,7 +408,10 @@ const OpenEnv = (props: Props) => {
                     {testData.environmentCondition || "N/A"}
                   </Descriptions.Item>
                   <Descriptions.Item label="Input Data and Test Procedure">
-                    {testData.testProcedure || "N/A"}
+                  <TestCaseViewer 
+                    testProcedure={testData.testProcedure || "N/A"}
+                    imageList={imageList}
+                  />
                   </Descriptions.Item>
                   <Descriptions.Item label="Expected Output">
                     {testData.expectedOutput || "N/A"}
@@ -535,6 +540,7 @@ const OpenEnv = (props: Props) => {
         scenarioId={scenarioData?.id || null}
         envId = {env || null}
         exTest = {firstTestCase}
+        imageList={imageList}
       />
 
       <EditTestForm
@@ -548,6 +554,7 @@ const OpenEnv = (props: Props) => {
       ? testList[selectedTest].id  : null}
       envId={ env || null}
       exTest={testList[selectedTest]}
+      imageList={imageList}
       />
 
       <UploadImageModal
